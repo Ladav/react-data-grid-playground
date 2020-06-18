@@ -1,13 +1,22 @@
-import React, { useState, useCallback, useEffect } from 'react'
+import React, { useState, useCallback, useEffect, useMemo } from 'react'
 import ReactDataGrid, {
   Column,
   FormatterProps,
   EditorProps,
   Editor,
+  UpdateActions,
+  RowsUpdateEvent,
+  HeaderRendererProps,
+  Row as GridRow,
+  RowRendererProps,
 } from 'react-data-grid'
 import useMeasure from 'react-use-measure'
 import { range } from 'lodash-es'
 import clsx from 'clsx'
+import { Dropdown, Menu } from 'antd'
+
+import Toolbar from './components/Toolbar'
+import CreateRow from './components/CreateRow'
 
 const getColorFromValue = (value: string): string => {
   switch (value) {
@@ -112,28 +121,74 @@ class StatusEditor extends React.Component<EditorProps<string>>
   }
 }
 
-// const columns: Column<any>[] = [
-//   {
-//     key: 'name',
-//     name: 'Item Name',
-//     resizable: true,
-//     width: 160,
-//   },
-//   ...range(100).map((val) => ({
-//     key: val.toString(),
-//     name: val.toString().padStart(2, '0'),
-//     maxWidth: 50,
-//     headerCellClass: 'font-medium text-gray-900 text-xs',
-//     cellClass: 'p-0',
-//     formatter: StatusFormatter,
-//     editable: true,
-//     editor: StatusEditor,
-//   })),
-// ]
+// row render (implement's context menu)
+const RowRenderer: any = (props: any) => {
+  // console.log(props)
+  const [show, setShow] = useState(false)
 
-const rows = range(30).map((val) => ({
+  return (
+    <React.Fragment>
+      <GridRow
+        {...props}
+        className="rdg-cell-frozen rdg-cell-frozen-last"
+        onContextMenu={() => {
+          setShow(true)
+        }}
+      />
+      {show ? (
+        <div className="absolute z-10 w-48 px-4 py-3 bg-white rounded shadow-md">
+          <div className="mb-3 text-xs font-medium tracking-wide text-gray-700 uppercase">
+            Options
+          </div>
+          <button
+            className={clsx('flex items-center focus:outline-none w-full')}
+          >
+            <CreateRow
+              rowIdx={props.rowIdx}
+              addRow={props.onAddRow}
+              trigger={
+                <div className="text-xs text-gray-800 cursor-pointer">
+                  Add Row Above
+                </div>
+              }
+            />
+            <div className="flex-1" />
+          </button>
+        </div>
+      ) : null}
+    </React.Fragment>
+  )
+}
+
+const INITIAL_COL_COUNT = 100
+const INITIAL_ROW_COUNT = 100
+
+const columns: Column<any>[] = [
+  {
+    key: 'name',
+    name: 'Item Name',
+    resizable: true,
+    width: 160,
+    frozen: true,
+    summaryFormatter: ({ row }: any) => row.name,
+    
+  },
+  ...range(INITIAL_COL_COUNT).map((val) => ({
+    key: val.toString(),
+    name: val.toString().padStart(2, '0'),
+    maxWidth: 50,
+    headerCellClass: 'font-medium text-gray-900 text-xs',
+    cellClass: 'p-0',
+    formatter: StatusFormatter,
+    editable: true,
+    editor: StatusEditor,
+    summaryFormatter: ({ row }: any) => <p />,
+  })),
+]
+
+const rows = range(INITIAL_ROW_COUNT).map((val) => ({
   name: `Item ${val + 1}`,
-  ...range(100).reduce(
+  ...range(INITIAL_COL_COUNT).reduce(
     (acc, col) => ({ ...acc, [col.toString()]: undefined }),
     {},
   ),
@@ -144,114 +199,123 @@ const App = () => {
 
   const [rowsData, setRowsData] = useState(rows)
 
-  const [colsData, setColsData] = useState<any>([])
+  const [colsData, setColsData] = useState(columns)
 
-  
-  // let temp = 10
-  // console.log(colsData, temp)
-  
+  // console.log(colsData)
+
   const handleAddCol = useCallback(() => {
-    // console.log(temp)
     console.log(colsData)
-    
-    setColsData((prevCols: any) => {
-      const key = (prevCols.length - 1).toString()
-      const name = (prevCols.length - 1).toString().padStart(2, '0')
-      return [
-        ...prevCols,
-        {
-          key,
-          name,
-          maxWidth: 50,
-          headerCellClass: 'font-medium text-gray-900 text-xs',
-          cellClass: 'p-0',
-          formatter: StatusFormatter,
-          editable: true,
-          editor: StatusEditor,
-        },
-      ]
-    })
-  }, [])
-  
-  const handleAddRow = useCallback(() => {
-    // console.log(rowsData)
-    setRowsData((prevRows) => {
-      let cols: any = []
-      setColsData((prevCols: any) => {
-        cols = prevCols
-        return prevCols
-      })
-      
+
+    const newCol = {
+      key: (+colsData[1].key - 1).toString(),
+      name: (+colsData[1].key - 1).toString().padStart(2, '0'),
+      maxWidth: 50,
+      headerCellClass: 'font-medium text-gray-900 text-xs',
+      cellClass: 'p-0',
+      formatter: StatusFormatter,
+      editable: true,
+      frozen: true,
+      editor: StatusEditor,
+    }
+
+    const updatedColsData = [...colsData]
+
+    // adding new column in updatedColsData
+    updatedColsData.splice(1, 0, newCol)
+
+    setColsData(updatedColsData)
+  }, [colsData])
+
+  const handleAddRow = useCallback(
+    (index) => {
+      console.log(rowsData, index)
       const newRow = {
-        name: `Item ${prevRows.length + 1}`,
-        ...range(cols.length - 1).reduce(
+        name: `Item ${rowsData.length + 1}`,
+        ...range(colsData.length - 1).reduce(
           (acc, col) => ({ ...acc, [col.toString()]: undefined }),
           {},
-          ),
+        ),
+      }
+
+      const updatedRowsData = [...rowsData]
+
+      updatedRowsData.splice(index, 0, newRow)
+
+      setRowsData(updatedRowsData)
+    },
+    [rowsData, colsData],
+  )
+
+  // later replace the following any with row type/interface
+  // const handleRowUpdate = useCallback(({ fromRow, toRow, updated, action }: RowsUpdateEvent<Partial<any>>): void => {
+  const handleRowUpdate = useCallback(
+    (props: RowsUpdateEvent<Partial<any>>): void => {
+      console.log('[row Updated]', props)
+      const { fromRow, toRow, updated, action } = props
+      const updatedRows = [...rowsData]
+      let start
+      let end
+
+      if (action === UpdateActions.COPY_PASTE) {
+        start = toRow
+        end = toRow
+      } else {
+        start = Math.min(fromRow, toRow)
+        end = Math.max(fromRow, toRow)
+      }
+
+      for (let i = start; i <= end; i++) {
+        updatedRows[i] = { ...updatedRows[i], ...updated }
+      }
+
+      setRowsData(updatedRows)
+    },
+    [rowsData],
+  )
+
+  return (
+    <div className="w-screen h-screen overflow-hidden" ref={ref}>
+      <Toolbar
+        onAddCol={handleAddCol}
+        onAddRow={handleAddRow}
+        numberOfCols={colsData.length}
+        numberOfRows={rowsData.length}
+        rowIdx={0}
+        trigger={
+          <div className="px-4 py-2 mx-2 bg-gray-200 rounded shadow cursor-pointer">
+            Add Row
+          </div>
         }
-        console.log(prevRows, cols)
-        return [...prevRows, newRow]
-      })
-    }, [])
-    
-    useEffect(() => {
-      setColsData([{
-        key: 'name',
-        name: 'Item Name',
-        resizable: true,
-        width: 160,
-        headerRenderer: () => {
-          return (
-            <div className="relative w-full h-full">
-              <div>Item Name</div>
-              <div className="absolute bottom-0 left-0 flex my-4">
-                <div
-                  className="flex items-center justify-center w-16 h-8 px-4 py-2 mx-1 font-normal bg-gray-200 rounded shadow cursor-pointer"
-                  onClick={handleAddCol}
-                >
-                  Add Col
-                </div>
-  
-                <div
-                  className="flex items-center justify-center w-16 h-8 px-4 py-2 mx-1 font-normal bg-gray-200 rounded shadow cursor-pointer"
-                  onClick={handleAddRow}
-                >
-                  Add Row
-                </div>
-              </div>
-            </div>
-          )
-        },
-      },
-      ...range(10).map((val) => ({
-        key: val.toString(),
-        name: val.toString().padStart(2, '0'),
-        maxWidth: 50,
-        headerCellClass: 'font-medium text-gray-900 text-xs',
-        cellClass: 'p-0',
-        formatter: StatusFormatter,
-        editable: true,
-        editor: StatusEditor,
-      })),
-    ])
-    }, [])
-    // console.log(colsData, rowsData)
-    
-    return (
-      <div className="w-screen h-screen overflow-hidden" ref={ref}>
+      />
       <ReactDataGrid
-        headerRowHeight={180}
+        enableCellDragAndDrop
+        enableCellCopyPaste
         columns={colsData}
         rows={rowsData}
-        height={bounds?.height}
-        onRowsUpdate={({ fromRow, updated = {} }) => {
-          setRowsData((dataState) =>
-            dataState.map((item, index) =>
-              index !== fromRow ? item : { ...item, ...(updated) },
-            ),
-          )
-        }}
+        height={bounds?.height - 80} // subtract toolbar height
+        onRowsUpdate={handleRowUpdate}
+        rowRenderer={(props) => (
+          <RowRenderer
+            {...props}
+            onAddRow={(index: number) => handleAddRow(index)}
+          />
+        )}
+        summaryRows={rowsData.slice(0,4)}
+        
       />
+
+      <div className="fixed bottom-0 left-0 mb-8 ml-8">
+        <CreateRow
+          addRow={handleAddRow}
+          numberOfRows={rowsData.length}
+          rowIdx={rowsData.length}
+          trigger={
+            <div className="px-4 py-2 mx-2 bg-gray-200 rounded shadow cursor-pointer">
+              Add Row
+            </div>
+          }
+        />
+      </div>
     </div>
   )
 }
