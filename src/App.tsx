@@ -1,4 +1,11 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react'
+import React, {
+  useState,
+  useCallback,
+  useEffect,
+  useMemo,
+  JSXElementConstructor,
+  useRef,
+} from 'react'
 import ReactDataGrid, {
   Column,
   FormatterProps,
@@ -11,12 +18,13 @@ import ReactDataGrid, {
   RowRendererProps,
 } from 'react-data-grid'
 import useMeasure from 'react-use-measure'
-import { range } from 'lodash-es'
+import { range, debounce } from 'lodash-es'
 import clsx from 'clsx'
 import { Dropdown, Menu } from 'antd'
 
 import Toolbar from './components/Toolbar'
 import CreateRow from './components/CreateRow'
+import { toArray } from 'antd/lib/form/util'
 
 const getColorFromValue = (value: string): string => {
   switch (value) {
@@ -131,6 +139,11 @@ const RowRenderer: any = (props: any) => {
       <GridRow
         {...props}
         className="rdg-cell-frozen rdg-cell-frozen-last"
+        style={
+          props.row.frozen || props.row.name === 'Item -100'
+            ? { position: 'sticky', top: props.rowIdx * 0 + 35, zIndex: 99 }
+            : {}
+        }
         onContextMenu={() => {
           setShow(true)
         }}
@@ -160,8 +173,8 @@ const RowRenderer: any = (props: any) => {
   )
 }
 
-const INITIAL_COL_COUNT = 100
-const INITIAL_ROW_COUNT = 100
+const INITIAL_COL_COUNT = 10
+const INITIAL_ROW_COUNT = 10
 
 const columns: Column<any>[] = [
   {
@@ -171,7 +184,6 @@ const columns: Column<any>[] = [
     width: 160,
     frozen: true,
     summaryFormatter: ({ row }: any) => row.name,
-    
   },
   ...range(INITIAL_COL_COUNT).map((val) => ({
     key: val.toString(),
@@ -182,7 +194,10 @@ const columns: Column<any>[] = [
     formatter: StatusFormatter,
     editable: true,
     editor: StatusEditor,
-    summaryFormatter: ({ row }: any) => <p />,
+    summaryFormatter: (props: any) => {
+      // console.log(props)
+      return <p />
+    },
   })),
 ]
 
@@ -192,6 +207,8 @@ const rows = range(INITIAL_ROW_COUNT).map((val) => ({
     (acc, col) => ({ ...acc, [col.toString()]: undefined }),
     {},
   ),
+  frozen: false,
+  id: val,
 }))
 
 const App = () => {
@@ -200,6 +217,10 @@ const App = () => {
   const [rowsData, setRowsData] = useState(rows)
 
   const [colsData, setColsData] = useState(columns)
+
+  const [testRow, setTestRow] = useState({ ...rows[0], name: 'Item -100' })
+
+  const testRef = useRef(null)
 
   // console.log(colsData)
 
@@ -228,13 +249,15 @@ const App = () => {
 
   const handleAddRow = useCallback(
     (index) => {
-      console.log(rowsData, index)
+      // console.log(rowsData, index)
       const newRow = {
         name: `Item ${rowsData.length + 1}`,
         ...range(colsData.length - 1).reduce(
           (acc, col) => ({ ...acc, [col.toString()]: undefined }),
           {},
         ),
+        frozen: index === 0,
+        id: rowsData.length + 1,
       }
 
       const updatedRowsData = [...rowsData]
@@ -273,6 +296,8 @@ const App = () => {
     [rowsData],
   )
 
+  // console.log('all done')
+
   return (
     <div className="w-screen h-screen overflow-hidden" ref={ref}>
       <Toolbar
@@ -288,6 +313,7 @@ const App = () => {
         }
       />
       <ReactDataGrid
+      ref={testRef}
         enableCellDragAndDrop
         enableCellCopyPaste
         columns={colsData}
@@ -300,8 +326,59 @@ const App = () => {
             onAddRow={(index: number) => handleAddRow(index)}
           />
         )}
-        summaryRows={rowsData.slice(0,4)}
-        
+        // summaryRows={rowsData.slice(0, 4)}
+        onScroll={(props) => {
+          // console.dir(props)
+
+          console.dir(testRef)
+
+          console.dir(props.currentTarget)
+          console.log(props.currentTarget)
+
+          // if(props.currentTarget) {
+          //   props.currentTarget = [...(props.currentTarget.childNodes as any), <p>nasdfsafa</p>] as any
+          // }
+
+          let topVisibleRowIndex =
+            props.currentTarget.childNodes[3].childNodes[0].textContent?.replace(
+              'Item ',
+              '',
+            ) || 0
+
+          if (+topVisibleRowIndex === -100) {
+            topVisibleRowIndex =
+              props.currentTarget.childNodes[4].childNodes[0].textContent?.replace(
+                'Item ',
+                '',
+              ) || 0
+          }
+
+          console.log(topVisibleRowIndex)
+
+          if (topVisibleRowIndex && +topVisibleRowIndex !== -100) {
+            const timer = setTimeout(() => {
+              setRowsData((prevRows) => {
+                return prevRows.filter((row) => {
+                  return row !== testRow
+                })
+              })
+
+              // topVisibleRowIndex =
+              //   props.currentTarget.childNodes[3].childNodes[0].textContent?.replace(
+              //     'Item ',
+              //     '',
+              //   ) || 0
+
+              setRowsData((prevRows) => [
+                ...prevRows.slice(0, +topVisibleRowIndex),
+                testRow,
+                ...prevRows.slice(+topVisibleRowIndex),
+              ])
+
+              clearTimeout(timer)
+            }, 300)
+          }
+        }}
       />
 
       <div className="fixed bottom-0 left-0 mb-8 ml-8">
