@@ -15,7 +15,7 @@
     "autoprefixer": "^9.8.0",
     "clsx": "^1.1.1",
     "faker": "^4.1.0",
-    "lodash-es": "^4.17.15",
+    "lodash-es": "^4.17.21",
     "react": "^16.13.1",
     "react-app-rewire-postcss": "^3.0.2",
     "react-app-rewired": "^2.1.6",
